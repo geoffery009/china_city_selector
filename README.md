@@ -13,3 +13,8 @@ A new Flutter application.
  <br>
  <br>数据在：china_cities.dart
  <br>文字描述在：strings.dart
+
+
+<br>app:https://fir.im/selector
+
+<br>![Alt text](assets/20180410175750.png)
