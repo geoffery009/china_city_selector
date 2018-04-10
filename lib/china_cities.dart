@@ -1,5 +1,20 @@
-//中国城市名称，已按拼音排序
+//热门城市
+List<Map> china_cities_hot_data = [
+  {"name": "北京", "pinyin": "beijing"},
+  {"name": "上海", "pinyin": "shanghai"},
+  {"name": "广州", "pinyin": "guangzhou"},
+  {"name": "深圳", "pinyin": "shenzhen"},
+  {"name": "杭州", "pinyin": "hangzhou"},
+  {"name": "南京", "pinyin": "nanjing"},
+  {"name": "天津", "pinyin": "tianjin"},
+  {"name": "武汉", "pinyin": "wuhan"},
+  {"name": "重庆", "pinyin": "chongqing"},
+];
+
+//中国城市名称，已按拼音排序;【热门】不需要直接注释数据即可
 List<Map> china_cities_data = [
+//  {"name": "定位", "pinyin": "1"},
+  {"name": "热门", "pinyin": "0"},
   {"name": "阿拉善", "pinyin": "alashanmeng"},
   {"name": "鞍山", "pinyin": "anshan"},
   {"name": "安庆", "pinyin": "anqing"},
