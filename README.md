@@ -17,4 +17,25 @@
 
 <br>app:https://fir.im/selector
 
+##使用：
+
+添加路由
+````dart
+    return new MaterialApp(
+      routes: <String, WidgetBuilder>{
+        '/a': (BuildContext context) => new SelectorPage(),
+      },
+    );
+````
+
+
+打开并接收返回值
+````dart
+    String result = await Navigator.pushNamed(context, '/a');
+
+    setState(() {
+      city = result == null ? "" : result;
+    });
+````
+
 <br>![Alt text](assets/20180411120632.png)
