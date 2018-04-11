@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import './selector.dart';
-import 'dart:async';
 
 void main() => runApp(new MyApp());
 

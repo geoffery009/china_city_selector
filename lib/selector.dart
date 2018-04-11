@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import "package:flutter/rendering.dart";
 import 'dart:collection';
-import './china_cities.dart';
-import './strings.dart';
+import 'dart:async';
+import 'package:china_city_selector/china_cities.dart';
+import 'package:china_city_selector/strings.dart';
+import 'package:china_city_selector/search_result_widget.dart';
 
 class SelectorPage extends StatefulWidget {
   SelectorPage({Key key, this.title}) : super(key: key);
@@ -13,17 +15,17 @@ class SelectorPage extends StatefulWidget {
 }
 
 class _SelectorPageState extends State<SelectorPage> {
-  Map<String, dynamic> cityUpWordStartIndex = new HashMap();
-  List<String> cityUpWordArr = new List();
+  Map<String, dynamic> cityUpWordStartIndex = new HashMap(); //不同首字母的开始index
+  List<String> cityUpWordArr = new List(); //所有首字母集合
+
   ScrollController scrollController = new ScrollController();
-  double tileHeight = 48.0; //城市列表每项高度
   double tileTileHeight = 32.0; //列表标题每项高度
   double selectUpWordTileHeight = 24.0; //字母选择列表每项高度
   int hotCityHeightScale = 1;
   String selectedUpWord = "", curSelectedUpWord = "";
-  double appBarHeight = 0.0;
 
-  TextEditingController textEditingController = new TextEditingController();
+  bool isSearchResultPage = false;
+  List<Map> searchMap = new List();
 
   @override
   void initState() {
@@ -46,49 +48,110 @@ class _SelectorPageState extends State<SelectorPage> {
   Widget build(BuildContext context) {
     return new Scaffold(
       appBar: new AppBar(
-        title: new Row(
-          children: <Widget>[
-            new Expanded(
-                child: new Container(
-              padding: const EdgeInsets.only(left: 20.0, right: 20.0),
-              margin: const EdgeInsets.only(right: 20.0),
-              child: new TextField(
-                style: new TextStyle(fontSize: 14.0, color: Colors.black),
-                decoration: new InputDecoration(
-                  hintText: Strings.SEARCH_HINT_TEXT,
-                  hintStyle: new TextStyle(color: Colors.grey),
-                ),
-                controller: textEditingController,
-              ),
-              decoration: new BoxDecoration(color: Colors.grey[200]),
-            )),
-            new GestureDetector(
-              child: new Text(
-                Strings.CANCEL,
-                style: new TextStyle(fontSize: 14.0),
-              ),
-              onTap: () {
-                _onTileClick("");
-              },
-            )
-          ],
-        ),
+        title: _getTopSearchWidget(),
       ),
-      body: new Stack(
+      body: _getContentWidget(),
+    );
+  }
+
+  Widget _getContentWidget() {
+    if (isSearchResultPage) {
+      return new SearchResultWidget(searchMap);
+    } else {
+      return new Stack(
         alignment: Alignment.topRight,
         children: <Widget>[
           _getCityList(),
           _getWordSelectWidget(),
           _getShowSelectedCenterWidget()
         ],
-      ),
+      );
+    }
+  }
+
+  //搜索头部
+  Widget _getTopSearchWidget() {
+    return new Row(
+      children: <Widget>[
+        new Expanded(
+            child: new Container(
+          alignment: Alignment.centerLeft,
+          height: 32.0,
+          padding: const EdgeInsets.only(left: 12.0, right: 12.0),
+          margin: const EdgeInsets.only(right: 20.0),
+          child: new TextField(
+            onChanged: _search,
+            style: new TextStyle(fontSize: 14.0, color: Colors.black),
+            decoration: new InputDecoration.collapsed(
+                hintText: Strings.SEARCH_HINT_TEXT),
+          ),
+          decoration: new BoxDecoration(color: Colors.grey[200]), //边框样式
+        )),
+        new GestureDetector(
+          child: new Text(
+            Strings.CANCEL,
+            style: new TextStyle(fontSize: 14.0),
+          ),
+          onTap: () {
+            _onTileClick("");
+          },
+        )
+      ],
     );
+  }
+
+  void _search(String name) {
+    if (name != null && name.length > 0) {
+      if (name.contains(new RegExp("^[\u4e00-\u9fff]"))) {
+        //存在汉字,搜汉字
+        debugPrint("Search --搜汉字:" + name);
+        _startSearch(name, "name");
+      } else {
+        //搜字母
+        debugPrint("Search --搜字母:" + name);
+        _startSearch(name, "pinyin");
+      }
+    } else {
+      _setListState();
+    }
+  }
+
+  void _startSearch(String name, String key) {
+    searchWord(name, key).then((List<Map> map) {
+      searchMap = map;
+      _setSearchResultState();
+    });
+  }
+
+  Future<List<Map>> searchWord(String name, String key) async {
+    List<Map> result = new List();
+    for (int i = 0; i < china_cities_data.length; i++) {
+      if (china_cities_data[i][key].toString().contains(name)) {
+//        debugPrint("Find --" + china_cities_data[i].toString());
+        result.add(china_cities_data[i]);
+      }
+    }
+    return result;
+  }
+
+  _setSearchResultState() {
+    setState(() {
+      isSearchResultPage = true;
+      selectedUpWord = "";
+    });
+  }
+
+  _setListState() {
+    setState(() {
+      isSearchResultPage = false;
+      selectedUpWord = "";
+    });
   }
 
   //城市列表
   Widget _getCityList() {
     return new ListView(
-      children: _getData(),
+      children: _getCityItem(),
       controller: scrollController,
     );
   }
@@ -102,7 +165,7 @@ class _SelectorPageState extends State<SelectorPage> {
   }
 
   List<Widget> _getHotCityItem() {
-    //热门城市先计算行数，每行高度为tileHeight，这样方便计算滚动位置
+    //热门城市先计算行数，每行高度为Values.TILE_HEIGHT，这样方便计算滚动位置
     int rowNum = 3; //每行3列
     int columnNum = 1;
     columnNum = (china_cities_hot_data.length % rowNum > 0)
@@ -141,10 +204,58 @@ class _SelectorPageState extends State<SelectorPage> {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: row,
         ),
-        height: tileHeight,
+        height: Values.TILE_HEIGHT,
       ));
     }
 
+    return arr;
+  }
+
+  List<Widget> _getCityItem() {
+    List<Widget> arr = new List(); //存放每行布局
+    for (int i = 0; i < china_cities_data.length; i++) {
+      //遍历所有城市数据
+      String currentFLetter = getFirstLetter(china_cities_data[i]["pinyin"]);
+      String preFLetter =
+          i >= 1 ? getFirstLetter(china_cities_data[i - 1]["pinyin"]) : "";
+
+      if (currentFLetter != preFLetter) {
+        //首字母标题获取
+        String tempTitle = currentFLetter;
+        if (_isHotCityDes(tempTitle)) {
+          tempTitle = Strings.HOT_CITY_TITLE;
+        } else if (_isLocationCityDes(tempTitle)) {
+          tempTitle = Strings.LOCATION_CITY_TITLE;
+        }
+        //首字母作为标题
+        arr.add(new Container(
+          alignment: Alignment.centerLeft,
+          color: Colors.grey[200],
+          height: tileTileHeight,
+          padding: const EdgeInsets.only(left: 24.0),
+          child: new Text(tempTitle),
+        ));
+      }
+
+      //添加城市名称布局
+      if (_isHotCityDes(currentFLetter)) {
+        //热门城市内容
+        arr.add(_getHotCityList());
+      } else {
+        arr.add(new GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          child: new Container(
+            height: Values.TILE_HEIGHT,
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.only(left: 24.0),
+            child: new Text(china_cities_data[i]["name"]),
+          ),
+          onTap: () {
+            _onTileClick(china_cities_data[i]["name"]);
+          },
+        ));
+      }
+    }
     return arr;
   }
 
@@ -162,7 +273,13 @@ class _SelectorPageState extends State<SelectorPage> {
               _setUpWordDownState(cityUpWordArr[index]);
             },
             onVerticalDragUpdate: (DragUpdateDetails detail) {
-              _setSlideState(detail.globalPosition.dy);
+              RenderSliverList sliverList = c.findRenderObject();
+              RenderBox getBox = sliverList.firstChild;
+              var local = getBox.globalToLocal(detail.globalPosition);
+              debugPrint(
+                  local.toString() + "|" + detail.globalPosition.toString());
+
+              _setSlideState(local.dy);
             },
             onVerticalDragEnd: (DragEndDetails detail) {
               _setUpWordUpState();
@@ -196,7 +313,7 @@ class _SelectorPageState extends State<SelectorPage> {
             child: new Center(
               child: new Text(
                 selectedUpWord,
-                style: new TextStyle(color: Colors.white, fontSize: 50.0),
+                style: new TextStyle(color: Colors.white, fontSize: 44.0),
               ),
             ),
           ),
@@ -206,14 +323,16 @@ class _SelectorPageState extends State<SelectorPage> {
     return new Container();
   }
 
-  _setUpWordDownState(String name) {
-    debugPrint("Select Word---" + name);
+  _setUpWordDownState(String word) {
+    debugPrint("Select Word---" + word);
 
     setState(() {
-      selectedUpWord = name;
+      selectedUpWord = _isHotCityDes(word)
+          ? Strings.HOT_CITY_UP_WORD
+          : (_isLocationCityDes(word) ? Strings.LOCATION_CITY_UP_WORD : word);
     });
 
-    _setScrollToWord(name);
+    _setScrollToWord(word);
   }
 
   _setUpWordUpState() {
@@ -223,12 +342,11 @@ class _SelectorPageState extends State<SelectorPage> {
   }
 
   //这里要用当前滑到的位置除以高度；计算出滑动到哪个字母了
-  _setSlideState(double globalPosition) {
-    double minHeight = appBarHeight;
-    double maxHeight =
-        cityUpWordArr.length * selectUpWordTileHeight + appBarHeight;
-    if (globalPosition >= minHeight && globalPosition <= maxHeight) {
-      double index = (globalPosition - appBarHeight) / selectUpWordTileHeight;
+  _setSlideState(double localPosition) {
+    double minHeight = 0.0;
+    double maxHeight = cityUpWordArr.length * selectUpWordTileHeight;
+    if (localPosition >= minHeight && localPosition <= maxHeight) {
+      double index = localPosition / selectUpWordTileHeight;
       if (index >= 0) {
         String slideToWord = cityUpWordArr[index.toInt()];
 
@@ -236,7 +354,11 @@ class _SelectorPageState extends State<SelectorPage> {
           //防止重复animateTo动画
           debugPrint("Slide Word To---" + slideToWord);
           setState(() {
-            selectedUpWord = slideToWord;
+            selectedUpWord = _isHotCityDes(slideToWord)
+                ? Strings.HOT_CITY_UP_WORD
+                : (_isLocationCityDes(slideToWord)
+                    ? Strings.LOCATION_CITY_UP_WORD
+                    : slideToWord);
           });
           _setScrollToWord(slideToWord);
           curSelectedUpWord = slideToWord;
@@ -245,6 +367,7 @@ class _SelectorPageState extends State<SelectorPage> {
     }
   }
 
+  //城市列表滑动到指定单词位置
   _setScrollToWord(String word) {
     double value = 0.0;
     if (cityUpWordArr.indexOf(word) == 0) {
@@ -253,58 +376,12 @@ class _SelectorPageState extends State<SelectorPage> {
       //热门城市以下的布局都需要补偿热门城市布局内的额外高度
       value = (cityUpWordStartIndex[word] +
                   (hotCityHeightScale - 1) * (_isHotCityDes(word) ? 0 : 1)) *
-              tileHeight +
+              Values.TILE_HEIGHT +
           cityUpWordArr.indexOf(word) * tileTileHeight;
     }
     //滚动到指定位置
     scrollController.animateTo(value,
         duration: new Duration(milliseconds: 10), curve: Curves.ease);
-  }
-
-  List<Widget> _getData() {
-    List<Widget> arr = new List();
-    for (int i = 0; i < china_cities_data.length; i++) {
-      String currentFLetter = getFirstLetter(china_cities_data[i]["pinyin"]);
-      String preFLetter =
-          i >= 1 ? getFirstLetter(china_cities_data[i - 1]["pinyin"]) : "";
-
-      if (currentFLetter != preFLetter) {
-        String tempTitle = currentFLetter;
-        if (_isHotCityDes(tempTitle)) {
-          tempTitle = Strings.HOT_CITY_TITLE;
-        } else if (_isLocationCityDes(tempTitle)) {
-          tempTitle = Strings.LOCATION_CITY_TITLE;
-        }
-        //多加一行首字母
-        arr.add(new Container(
-          alignment: Alignment.centerLeft,
-          color: Colors.grey[200],
-          height: tileTileHeight,
-          padding: const EdgeInsets.only(left: 24.0),
-          child: new Text(tempTitle),
-        ));
-      }
-
-      if (_isHotCityDes(currentFLetter)) {
-        //热门城市内容
-        arr.add(_getHotCityList());
-      } else {
-        //添加城市名称布局
-        arr.add(new GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          child: new Container(
-            height: tileHeight,
-            alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.only(left: 24.0),
-            child: new Text(china_cities_data[i]["name"]),
-          ),
-          onTap: () {
-            _onTileClick(china_cities_data[i]["name"]);
-          },
-        ));
-      }
-    }
-    return arr;
   }
 
   _onTileClick(String name) {
